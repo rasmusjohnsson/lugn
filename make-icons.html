@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<title>Generera Lugn-ikoner</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #2d2a26; }
+  h1 { font-weight: 500; }
+  p { color: #555; line-height: 1.5; }
+  canvas { display: none; }
+  a.dl { display: inline-block; margin: 6px 8px 6px 0; padding: 10px 16px; background: #7c8b6f; color: #fff; text-decoration: none; border-radius: 8px; }
+  ol li { margin-bottom: 8px; }
+  code { background: #f0ece5; padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Generera ikoner för Lugn</h1>
+<p>Den här sidan genererar PNG-ikonerna som behövs för iOS-/Android-installation. Klicka på knapparna nedan för att ladda hem dem och spara dem i samma mapp som <code>index.html</code>.</p>
+<ol>
+  <li>Spara <code>icon-192.png</code></li>
+  <li>Spara <code>icon-512.png</code></li>
+  <li>Spara <code>icon-maskable-512.png</code> (samma bild med extra padding för Android)</li>
+</ol>
+<div id="links"></div>
+<canvas id="c192" width="192" height="192"></canvas>
+<canvas id="c512" width="512" height="512"></canvas>
+<canvas id="cmask" width="512" height="512"></canvas>
+
+<script>
+async function loadSvg(url) {
+  const txt = await fetch(url).then(r => r.text());
+  return new Promise((res, rej) => {
+    const blob = new Blob([txt], { type: 'image/svg+xml' });
+    const u = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { res(img); URL.revokeObjectURL(u); };
+    img.onerror = rej;
+    img.src = u;
+  });
+}
+
+function addLink(name, blob) {
+  const a = document.createElement('a');
+  a.className = 'dl';
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.textContent = 'Ladda hem ' + name;
+  document.getElementById('links').appendChild(a);
+}
+
+(async () => {
+  const img = await loadSvg('icon.svg');
+  for (const [size, id] of [[192, 'c192'], [512, 'c512']]) {
+    const c = document.getElementById(id);
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+    c.toBlob(b => addLink(`icon-${size}.png`, b), 'image/png');
+  }
+  // Maskable: 80% safe area => 10% padding on each side
+  const mc = document.getElementById('cmask');
+  const ctx = mc.getContext('2d');
+  ctx.fillStyle = '#f4f1ec';
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.drawImage(img, 51, 51, 410, 410);
+  mc.toBlob(b => addLink('icon-maskable-512.png', b), 'image/png');
+})();
+</script>
+</body>
+</html>
