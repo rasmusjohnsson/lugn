@@ -42,10 +42,24 @@
   <script src="app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      const isFirstControl = !navigator.serviceWorker.controller;
+      let updateShown = false;
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       });
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (isFirstControl) return; // ignore the very first claim on initial install
+        if (updateShown) return;
+        updateShown = true;
+        const b = document.createElement('button');
+        b.id = 'lugn-update';
+        b.textContent = '↻ Ny version — tryck för att uppdatera';
+        b.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#7c8b6f;color:#fff;border:none;padding:12px 20px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,0.18);cursor:pointer;z-index:300;font-size:14px;font-family:inherit;animation:lugn-fade-in 0.2s ease;';
+        b.addEventListener('click', () => location.reload());
+        document.body.appendChild(b);
+      });
     }
   </script>
+  <style>@keyframes lugn-fade-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }</style>
 </body>
 </html>

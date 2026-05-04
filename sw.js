@@ -3,7 +3,7 @@
 // - Handles notification click (focus/open the app)
 // - Handles background scheduled notifications via Notification Triggers when supported
 
-const VERSION = 'lugn-v3';
+const VERSION = 'lugn-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -28,31 +28,50 @@ self.addEventListener('activate', (e) => {
   })());
 });
 
+// Strategy:
+//   Network-first for the app shell (HTML/JS/CSS/JSON) so updates roll out
+//   immediately when online, with cache as offline fallback.
+//   Cache-first for static assets (icons, images) since they rarely change.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+
+  const path = url.pathname;
+  const isShell = path.endsWith('/') || /\.(html|js|css|json)$/.test(path);
+
+  if (isShell) {
+    e.respondWith((async () => {
+      try {
+        const res = await fetch(e.request, { cache: 'no-cache' });
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      } catch (err) {
+        const cached = await caches.match(e.request);
+        if (cached) return cached;
+        if (e.request.mode === 'navigate') {
+          const fb = await caches.match('./index.html');
+          if (fb) return fb;
+        }
+        throw err;
+      }
+    })());
+    return;
+  }
+
   e.respondWith((async () => {
     const cached = await caches.match(e.request);
-    if (cached) {
-      // Update in background
-      fetch(e.request).then((res) => {
-        if (res && res.ok) caches.open(VERSION).then(c => c.put(e.request, res.clone()));
-      }).catch(() => {});
-      return cached;
-    }
+    if (cached) return cached;
     try {
       const res = await fetch(e.request);
       if (res && res.ok) {
         const copy = res.clone();
-        caches.open(VERSION).then(c => c.put(e.request, copy));
+        caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});
       }
       return res;
     } catch (err) {
-      // Last resort: serve index for navigations
-      if (e.request.mode === 'navigate') {
-        const fallback = await caches.match('./index.html');
-        if (fallback) return fallback;
-      }
       throw err;
     }
   })());
