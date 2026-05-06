@@ -3,9 +3,9 @@
 En liten Express-server som tar emot push-prenumerationer från Lugn-appen och levererar schemalagda notiser via Web Push — så att de når telefonen även när appen är stängd.
 
 - **Storlek**: ~150 rader Node.js
-- **Beroenden**: `express`, `cors`, `web-push`, `better-sqlite3`
-- **Lagring**: SQLite-fil under `data/lugn.db`
-- **VAPID-nycklar**: genereras automatiskt vid första uppstart, sparas i `data/vapid.json`
+- **Beroenden**: `express`, `cors`, `web-push` (alla rena JS, inga native moduler)
+- **Lagring**: in-memory som standard. Sätt `LUGN_DATA_DIR` för att spara till JSON-fil mellan skrivningar.
+- **VAPID-nycklar**: läses från env vars om satta, annars från fil eller genereras + loggas vid uppstart.
 
 ## Köra lokalt
 
@@ -30,7 +30,7 @@ Servern lyssnar på `http://localhost:3030`. I appens Inställningar → Push-se
 4. **Environment variables** (alla valfria):
    - `LUGN_VAPID_SUBJECT`: t.ex. `mailto:du@exempel.se`
    - `LUGN_ALLOWED_ORIGINS`: t.ex. `https://dittnamn.github.io` (komma-separerad lista; default `*`)
-5. **Persistent disk**: skapa en disk på minst 1 GB monterad på `/var/data`, sätt env-variabel `LUGN_DATA_DIR=/var/data` så VAPID-nycklar och databas överlever omstart.
+5. **Persistent disk** (valfritt — kräver betald plan): skapa en disk monterad på `/var/data` och sätt env `LUGN_DATA_DIR=/var/data`. På Free-tier hoppar du detta steg och sätter istället `LUGN_VAPID_PUBLIC_KEY` + `LUGN_VAPID_PRIVATE_KEY` (kopiera från första bygget) så nycklarna är stabila. Klienten ombeds automatiskt om servern tappar prenumerationer.
 6. Klicka **Create Web Service**. Efter någon minut har du en URL som `https://lugn-push-xyz.onrender.com`.
 7. I Lugn-appen: klistra in URL:en, aktivera Bakgrundsnotiser, bevilja notistillstånd.
 
