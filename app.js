@@ -6,6 +6,7 @@
 
   // ---------- State ----------
   const STORAGE_KEY = 'lugn.v1';
+  const DEFAULT_PUSH_BACKEND = 'https://lugn.onrender.com';
 
   const defaultState = {
     activities: [], // { id, title, date (YYYY-MM-DD), time (HH:MM | null), notes, notify, done, subtasks:[{id,title,done}] }
@@ -13,9 +14,9 @@
     medLog: {}, // { medId: { 'YYYY-MM-DD::HH:MM': takenAtISO } }
     settings: {
       notificationsEnabled: false,
-      pushEnabled: false,        // background notifications via Web Push
-      pushBackend: '',           // URL of the Lugn push server (e.g. https://lugn-push.onrender.com)
-      pushSubscriptionId: ''     // returned by backend after /subscribe
+      pushEnabled: false,                         // background notifications via Web Push
+      pushBackend: DEFAULT_PUSH_BACKEND,          // URL of the Lugn push server
+      pushSubscriptionId: ''                      // returned by backend after /subscribe
     }
   };
 
@@ -26,7 +27,11 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return structuredClone(defaultState);
       const parsed = JSON.parse(raw);
-      return Object.assign(structuredClone(defaultState), parsed);
+      const merged = Object.assign(structuredClone(defaultState), parsed);
+      // Always force the push backend to the latest hardcoded value
+      merged.settings = Object.assign({}, defaultState.settings, parsed.settings || {});
+      merged.settings.pushBackend = DEFAULT_PUSH_BACKEND;
+      return merged;
     } catch {
       return structuredClone(defaultState);
     }
@@ -1431,24 +1436,8 @@
     });
     pushGroup.appendChild(pushRow);
 
-    const backendField = el(`
-      <div class="toggle-row" style="display:block;">
-        <div class="label-block" style="margin-bottom:8px;">
-          <div class="l">Push-server URL</div>
-          <div class="h">T.ex. https://din-server.onrender.com</div>
-        </div>
-        <input class="input" id="push-backend" type="url" placeholder="https://..." value="${escapeHtml(state.settings.pushBackend || '')}" style="width:100%;" />
-      </div>
-    `);
-    const backendInput = backendField.querySelector('#push-backend');
-    backendInput.addEventListener('change', () => {
-      state.settings.pushBackend = backendInput.value.trim();
-      save();
-    });
-    pushGroup.appendChild(backendField);
-
     app.appendChild(pushGroup);
-    app.appendChild(el(`<div class="tiny-tip" style="margin-top:6px;margin-bottom:18px;text-align:left;">Bakgrundsnotiser kräver att du driftsätter den lilla push-servern (se README) och anger dess URL ovan.</div>`));
+    app.appendChild(el(`<div class="tiny-tip" style="margin-top:6px;margin-bottom:18px;text-align:left;">På iOS måste appen vara installerad på hemskärmen för att notiser ska fungera.</div>`));
 
     const danger = el(`
       <div class="settings-group">

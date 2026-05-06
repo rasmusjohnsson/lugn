@@ -3,7 +3,7 @@
 // - Handles notification click (focus/open the app)
 // - Handles background scheduled notifications via Notification Triggers when supported
 
-const VERSION = 'lugn-v4';
+const VERSION = 'lugn-v5';
 const APP_SHELL = [
   './',
   './index.html',
