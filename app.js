@@ -1668,17 +1668,35 @@
   async function syncPushSchedule() {
     if (!state.settings.pushEnabled || !state.settings.pushBackend || !state.settings.pushSubscriptionId) return;
     const items = buildScheduleItems();
-    const r = await fetch(backendUrl('/schedule'), {
+    const post = (id) => fetch(backendUrl('/schedule'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscriptionId: state.settings.pushSubscriptionId, items })
+      body: JSON.stringify({ subscriptionId: id, items })
     });
-    if (!r.ok) {
-      // If subscription is unknown (server lost it), force re-enable
-      if (r.status === 404) {
-        state.settings.pushSubscriptionId = '';
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      }
+    let r = await post(state.settings.pushSubscriptionId);
+    if (r.status === 404) {
+      // Server forgot us (e.g. after redeploy). Re-register existing PushManager subscription.
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          const subResp = await fetch(backendUrl('/subscribe'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscription: sub.toJSON(), userAgent: navigator.userAgent })
+          });
+          if (subResp.ok) {
+            const { subscriptionId } = await subResp.json();
+            state.settings.pushSubscriptionId = subscriptionId;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            r = await post(subscriptionId);
+          }
+        }
+      } catch {}
+    }
+    if (!r.ok && r.status === 404) {
+      state.settings.pushSubscriptionId = '';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
   }
 

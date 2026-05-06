@@ -52,14 +52,24 @@ db.exec(`
 `);
 
 // ---------- VAPID keys ----------
+// Priority: env vars > saved file > newly generated
 const VAPID_FILE = path.join(DATA_DIR, 'vapid.json');
 let vapid;
-if (fs.existsSync(VAPID_FILE)) {
+if (process.env.LUGN_VAPID_PUBLIC_KEY && process.env.LUGN_VAPID_PRIVATE_KEY) {
+  vapid = {
+    publicKey: process.env.LUGN_VAPID_PUBLIC_KEY,
+    privateKey: process.env.LUGN_VAPID_PRIVATE_KEY
+  };
+  console.log('Using VAPID keys from environment.');
+} else if (fs.existsSync(VAPID_FILE)) {
   vapid = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
 } else {
   vapid = webPush.generateVAPIDKeys();
-  fs.writeFileSync(VAPID_FILE, JSON.stringify(vapid, null, 2));
-  console.log('Generated new VAPID keys at', VAPID_FILE);
+  try { fs.writeFileSync(VAPID_FILE, JSON.stringify(vapid, null, 2)); } catch {}
+  console.log('Generated new VAPID keys.');
+  console.log('IMPORTANT — copy these to LUGN_VAPID_PUBLIC_KEY and LUGN_VAPID_PRIVATE_KEY');
+  console.log('environment variables to keep them stable across redeploys:');
+  console.log(JSON.stringify(vapid, null, 2));
 }
 webPush.setVapidDetails(VAPID_SUBJECT, vapid.publicKey, vapid.privateKey);
 
