@@ -164,8 +164,21 @@
     if (dateStr < a.date) return false;
     if (a.seriesEnd && dateStr > a.seriesEnd) return false;
     if (a.exceptions && a.exceptions.includes(dateStr)) return false;
-    // 'daily' for now
+    // Day-of-week filter (Mon-first index 0..6). Empty/missing = every day.
+    if (a.repeatDays && a.repeatDays.length > 0 && a.repeatDays.length < 7) {
+      const dow = dayOfWeekISO(fromDateStr(dateStr));
+      if (!a.repeatDays.includes(dow)) return false;
+    }
     return true;
+  }
+  function repeatLabel(a) {
+    if (!isRecurring(a)) return '';
+    const days = a.repeatDays;
+    if (!days || days.length === 0 || days.length === 7) return 'varje dag';
+    const set = new Set(days);
+    if (days.length === 5 && [0,1,2,3,4].every(d => set.has(d))) return 'vardagar';
+    if (days.length === 2 && set.has(5) && set.has(6)) return 'helger';
+    return days.slice().sort((x, y) => x - y).map(i => DAY_NAMES_SHORT[(i + 1) % 7]).join(', ');
   }
 
   function activitiesFor(dateStr) {
@@ -386,7 +399,7 @@
       body.appendChild(titleLine);
       const meta = el(`<div class="item-meta"></div>`);
       if (a.time) meta.appendChild(el(`<span class="time-pill">${escapeHtml(a.time)}</span>`));
-      if (recurring) meta.appendChild(el(`<span class="badge">↻ varje dag</span>`));
+      if (recurring) meta.appendChild(el(`<span class="badge">↻ ${escapeHtml(repeatLabel(a))}</span>`));
       if (a.notify) meta.appendChild(el(`<span class="badge">· påminnelse</span>`));
       body.appendChild(meta);
       if (a.notes) body.appendChild(el(`<div class="item-note">${escapeHtml(a.notes)}</div>`));
@@ -606,9 +619,14 @@
         <div class="field">
           <label for="act-repeat">Upprepning</label>
           <select class="input" id="act-repeat">
-            <option value="none" ${(a.repeat || 'none') === 'none' ? 'selected' : ''}>Engångs</option>
-            <option value="daily" ${a.repeat === 'daily' ? 'selected' : ''}>Varje dag</option>
+            <option value="none">Engångs</option>
+            <option value="daily">Varje dag</option>
+            <option value="custom">Vissa dagar</option>
           </select>
+        </div>
+        <div class="field" id="act-days-field" style="display:none;">
+          <label>Dagar</label>
+          <div class="daychips" id="act-days"></div>
         </div>
 
         <div class="field">
@@ -642,6 +660,49 @@
         ${isEdit ? `<div style="margin-top:6px;"><button class="btn danger block" id="act-delete">Ta bort</button></div>` : ''}
       </div>
     `);
+
+    // ---- Repeat: select + day chips ----
+    const repeatSelect = modal.querySelector('#act-repeat');
+    const daysField = modal.querySelector('#act-days-field');
+    const daysEl = modal.querySelector('#act-days');
+    // Determine initial mode
+    const initialDays = Array.isArray(a.repeatDays) ? a.repeatDays.slice() : [];
+    let draftRepeatDays;
+    let initialMode;
+    if (!a.repeat || a.repeat === 'none') {
+      initialMode = 'none';
+      draftRepeatDays = [];
+    } else if (initialDays.length === 0 || initialDays.length === 7) {
+      initialMode = 'daily';
+      draftRepeatDays = [];
+    } else {
+      initialMode = 'custom';
+      draftRepeatDays = initialDays;
+    }
+    repeatSelect.value = initialMode;
+
+    function renderDayChips() {
+      daysEl.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const chip = el(`<button type="button" class="daychip ${draftRepeatDays.includes(i) ? 'on' : ''}" data-d="${i}">${DAY_NAMES_SHORT[(i + 1) % 7]}</button>`);
+        chip.addEventListener('click', () => {
+          const idx = draftRepeatDays.indexOf(i);
+          if (idx >= 0) draftRepeatDays.splice(idx, 1); else draftRepeatDays.push(i);
+          chip.classList.toggle('on');
+        });
+        daysEl.appendChild(chip);
+      }
+    }
+    function updateDaysVisibility() {
+      daysField.style.display = repeatSelect.value === 'custom' ? '' : 'none';
+      if (repeatSelect.value === 'custom' && draftRepeatDays.length === 0) {
+        // Default to weekdays so user has a sensible starting point
+        draftRepeatDays = [0, 1, 2, 3, 4];
+      }
+      if (repeatSelect.value === 'custom') renderDayChips();
+    }
+    updateDaysVisibility();
+    repeatSelect.addEventListener('change', updateDaysVisibility);
 
     const subListEl = modal.querySelector('#sub-list');
     const HANDLE_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="2.4" stroke-linecap="round"/></svg>`;
@@ -775,7 +836,11 @@
     modal.querySelector('#act-save').addEventListener('click', async () => {
       const title = modal.querySelector('#act-title').value.trim();
       if (!title) { modal.querySelector('#act-title').focus(); return; }
-      const newRepeat = modal.querySelector('#act-repeat').value || 'none';
+      const repeatMode = modal.querySelector('#act-repeat').value || 'none';
+      const newRepeat = repeatMode === 'none' ? 'none' : 'daily';
+      const newRepeatDays = repeatMode === 'custom'
+        ? draftRepeatDays.slice().sort((x, y) => x - y)
+        : [];
       const dateField = modal.querySelector('#act-date').value || todayStr();
       const cleanSubs = draftSubs
         .map(s => {
@@ -793,7 +858,8 @@
         notes: modal.querySelector('#act-notes').value.trim(),
         notify: notifyToggle.classList.contains('on'),
         subtasks: cleanSubs,
-        repeat: newRepeat
+        repeat: newRepeat,
+        repeatDays: newRepeatDays
       };
 
       if (!isEdit) {
